@@ -1,46 +1,54 @@
-from src.helper import load_pdf, text_split, download_hugging_face_embeddings
-from langchain.vectorstores import Pinecone
-import pinecone
-from dotenv import load_dotenv
+"""Create the Pinecone vector index from the repository's medical reference PDF."""
+
 import os
-from pinecone import Pinecone, ServerlessSpec
+from pathlib import Path
+
+from dotenv import load_dotenv
 from langchain_pinecone import PineconeVectorStore
+from pinecone import Pinecone, ServerlessSpec
 
-PINECONE_API_KEY = "63650804-25eb-4a2b-979c-83b11d35f0e9"
-PINECONE_API_ENV = "us-east-1"
-PINECONE_INDEX_NAME = "medicine"
-
-load_dotenv()
-
-PINECONE_API_KEY = os.environ.get('PINECONE_API_KEY')
-PINECONE_API_ENV = os.environ.get('PINECONE_API_ENV')
-
-# print(PINECONE_API_KEY)
-# print(PINECONE_API_ENV)
-
-extracted_data = load_pdf("data/")
-text_chunks = text_split(extracted_data)
-embeddings = download_hugging_face_embeddings()
-
-pc = Pinecone(
-    api_key=os.environ.get("PINECONE_API_KEY")
+from src.helper import (
+    download_hugging_face_embeddings,
+    load_pdf,
+    text_split,
 )
 
-# Check if the index exists, and create it if it doesn't
-if PINECONE_INDEX_NAME not in [index.name for index in pc.list_indexes().index_list["indexes"]]:
-    pc.create_index(
-        name=PINECONE_INDEX_NAME, 
-        dimension=384,  # Replace with the actual dimension of your embeddings
-        metric='cosine',  # Or the appropriate metric for your use case
-        spec=ServerlessSpec(
-            cloud='aws',
-            region=PINECONE_API_ENV
+PINECONE_INDEX_NAME = "medicine"
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def create_vector_index():
+    """Embed the bundled PDF chunks and store them in the Pinecone index."""
+    load_dotenv(PROJECT_ROOT / ".env")
+    api_key = os.getenv("PINECONE_API_KEY")
+    region = os.getenv("PINECONE_API_ENV")
+    if not api_key:
+        raise RuntimeError("Set PINECONE_API_KEY in your environment or .env file.")
+    if not region:
+        raise RuntimeError("Set PINECONE_API_ENV in your environment or .env file.")
+
+    documents = load_pdf(str(PROJECT_ROOT / "data"))
+    chunks = text_split(documents)
+    embeddings = download_hugging_face_embeddings()
+
+    client = Pinecone(api_key=api_key)
+    existing_indexes = [
+        index.name for index in client.list_indexes().index_list["indexes"]
+    ]
+    if PINECONE_INDEX_NAME not in existing_indexes:
+        client.create_index(
+            name=PINECONE_INDEX_NAME,
+            dimension=384,
+            metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region=region),
         )
+
+    PineconeVectorStore.from_texts(
+        [chunk.page_content for chunk in chunks],
+        embeddings,
+        index_name=PINECONE_INDEX_NAME,
     )
 
-# Create PineconeVectorStore from texts
-vector_store = PineconeVectorStore.from_texts(
-    [chunk.page_content for chunk in text_chunks],
-    embeddings,
-    index_name=PINECONE_INDEX_NAME
-)
+
+if __name__ == "__main__":
+    create_vector_index()
