@@ -1,32 +1,26 @@
-from langchain.document_loaders import PyPDFLoader, DirectoryLoader
+"""Utilities for preparing PDF text and sentence embeddings."""
+
+from langchain.document_loaders import DirectoryLoader, PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
 
-#Extract data from the PDF
-def load_pdf(data):
-    loader = DirectoryLoader(data,
-                    glob="*.pdf",
-                    loader_cls=PyPDFLoader)
-    
-    documents = loader.load()
 
-    return documents
+def load_pdf(data_directory):
+    """Load every PDF in the supplied directory as LangChain documents."""
+    loader = DirectoryLoader(
+        data_directory,
+        glob="*.pdf",
+        loader_cls=PyPDFLoader,
+    )
+    return loader.load()
 
 
-
-#Create text chunks
 def text_split(extracted_data):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size = 500, chunk_overlap = 20)
-    text_chunks = text_splitter.split_documents(extracted_data)
-
-    return text_chunks
-
-
-
-
+    """Split loaded documents into 500-character chunks with 20-character overlap."""
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=20)
+    return splitter.split_documents(extracted_data)
 
 
 def download_hugging_face_embeddings():
-    # Load the pre-trained embeddings model
-    model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    return model
+    """Load the sentence-transformer model used to embed documents and questions."""
+    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
